@@ -89,16 +89,17 @@ Dataset contains approximately:
 ## 📁 Project Structure
 
 ```text
-movie_recommendation_system/
+movie_reccomendation_system/
 │
-├── data/
-│   ├── tmdb_5000_movies.csv
-│   └── tmdb_5000_credits.csv
+├── screenshots/
+│   ├── 1.png
+│   ├── 2.png
+│   └── 3.png
 │
 ├── src/
 │   └── recommender.py
 │
 ├── app.py
-├── requirements.txt
 ├── README.md
+├── requirements.txt
 └── .gitignore
