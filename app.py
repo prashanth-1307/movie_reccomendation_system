@@ -1,166 +1,134 @@
-import pandas as pd
-import ast
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
+import streamlit as st
+
+from src.recommender import movies, recommend
 
 
-# Load datasets
-movies = pd.read_csv("data/tmdb_5000_movies.csv")
-credits = pd.read_csv("data/tmdb_5000_credits.csv")
-
-
-# Merge both datasets
-movies = movies.merge(
-    credits,
-    left_on="id",
-    right_on="movie_id"
+# Page configuration
+st.set_page_config(
+    page_title="Movie Recommendation System",
+    page_icon="🎬",
+    layout="wide"
 )
 
 
-# Select only the columns we need
-movies = movies[
-    [
-        "movie_id",
-        "title_x",
-        "overview",
-        "genres",
-        "keywords",
-        "cast",
-        "crew"
+# Title
+st.title("🎬 Movie Recommendation System")
+
+st.write(
+    "Select a movie and get 10 similar movie recommendations "
+    "using content-based filtering."
+)
+
+
+# Movie selection
+st.subheader("🔎 Search for a movie")
+
+search_query = st.text_input(
+    "Enter movie name:",
+    placeholder="e.g. Batman, Avatar, Inception..."
+)
+
+movie = None
+
+if search_query:
+
+    matching_movies = movies[
+        movies["title"].str.contains(
+            search_query,
+            case=False,
+            na=False
+        )
     ]
-]
 
-# Rename title_x to title
-movies.rename(columns={"title_x": "title"}, inplace=True)
+    if len(matching_movies) > 0:
 
+        movie = st.selectbox(
+            "Select a movie:",
+            matching_movies["title"].values
+        )
 
-# Handle missing overview
-movies["overview"] = movies["overview"].fillna("")
-
-
-# -----------------------------
-# Feature Extraction Functions
-# -----------------------------
-
-def convert(obj):
-    result = []
-
-    for item in ast.literal_eval(obj):
-        result.append(item["name"])
-
-    return result
+    else:
+        st.warning("No movies found. Try another search.")
 
 
-def convert3(obj):
-    result = []
+# Recommendation button
+if st.button("🎯 Recommend"):
 
-    for item in ast.literal_eval(obj):
-        result.append(item["name"])
+    if movie is None:
 
-    return result[:3]
+        st.warning("Please search and select a movie first.")
 
+    else:
 
-def fetch_director(obj):
-    for item in ast.literal_eval(obj):
-        if item["job"] == "Director":
-            return item["name"]
+        recommendations = recommend(movie)
 
-    return ""
+        st.subheader(f"Movies similar to **{movie}**")
 
-# recommendation function ========================
+        col1, col2 = st.columns(2)
 
-def recommend(movie):
-    if movie not in movie_index:
-        print("Movie not found.")
-        return
+        for i, recommendation in enumerate(recommendations):
 
-    index = movie_index[movie]
+            if i % 2 == 0:
 
-    distances = similarity[index]
+                with col1:
 
-    movies_list = sorted(
-        list(enumerate(distances)),
-        reverse=True,
-        key=lambda x: x[1]
-    )[1:11]
+                    st.markdown(
+                        f"### {i + 1}. {recommendation['title']}"
+                    )
 
-    print(f"\nRecommendations for {movie}:\n")
+                    st.write(
+                        f"Similarity Score: "
+                        f"**{recommendation['score']:.3f}**"
+                    )
 
-    for i, score in movies_list:
-        print(f"{movies.iloc[i].title}  →  {score:.3f}")
+                    st.divider()
 
+            else:
 
-# ===============
+                with col2:
 
-def clean_tags(text):
-    return text.lower().replace(" ", "")
+                    st.markdown(
+                        f"### {i + 1}. {recommendation['title']}"
+                    )
 
+                    st.write(
+                        f"Similarity Score: "
+                        f"**{recommendation['score']:.3f}**"
+                    )
 
-
-
-# -----------------------------
-# Feature Engineering
-# -----------------------------
-
-movies["genres"] = movies["genres"].apply(convert)
-
-movies["keywords"] = movies["keywords"].apply(convert)
-
-movies["cast"] = movies["cast"].apply(convert3)
-
-movies["crew"] = movies["crew"].apply(fetch_director)
-
-movies.rename(columns={"crew": "director"}, inplace=True)
-
-movies["overview"] = movies["overview"].apply(lambda x: x.split())
+                    st.divider()
 
 
-# -----------------------------
-# Create Tags
-# -----------------------------
+st.divider()
 
-movies["tags"] = (
-    movies["overview"]
-    + movies["genres"]
-    + movies["keywords"]
-    + movies["cast"]
-    + movies["director"].apply(lambda x: [x])
-)
+st.subheader("🧠 How the Recommendation System Works")
 
+st.write("""
+This system uses content-based filtering to recommend movies based
+on their similarity.
 
-# Convert list into string
-movies["tags"] = movies["tags"].apply(lambda x: " ".join(x))
+1. Movie metadata such as genres, keywords, cast, director, and
+   overview are combined into a single feature called `tags`.
 
+2. TF-IDF Vectorization converts the movie tags into numerical
+   feature vectors.
 
-# Keep only required columns
-movies = movies[
-    [
-        "movie_id",
-        "title",
-        "tags"
-    ]
-]
+3. Cosine Similarity measures the similarity between movies.
 
-tfidf = TfidfVectorizer(
-    max_features=5000,
-    stop_words="english"
-)
-
-tfidf_matrix = tfidf.fit_transform(movies["tags"])
-
-# print("TF-IDF matrix shape:", tfidf_matrix.shape)
-
-similarity = cosine_similarity(tfidf_matrix)
-
-# print("Similarity matrix shape:", similarity.shape)
-
-movie_index = pd.Series(
-    movies.index,
-    index=movies["title"]
-).drop_duplicates()
+4. For a selected movie, the system returns the 10 movies with
+   the highest similarity scores.
+""")
 
 
-recommend("Avatar")
+st.subheader("📊 Model Information")
 
-# Check result
-# print(movies.head())
+col1, col2, col3 = st.columns(3)
+
+with col1:
+    st.metric("Movies", len(movies))
+
+with col2:
+    st.metric("TF-IDF Features", 5000)
+
+with col3:
+    st.metric("Recommendations", 10)
